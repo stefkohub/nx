@@ -1776,6 +1776,39 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "triangular_solve" do
+    defn triangular_solve_grad_wrt_a(t, b) do
+      grad(t, fn tensor ->
+        x = Nx.LinAlg.triangular_solve(tensor, b)
+        inspect_value(x)
+
+        Nx.sum(x)
+      end)
+    end
+
+    defn triangular_solve_grad_wrt_b(t, b) do
+      grad(b, fn tensor ->
+        x = Nx.LinAlg.triangular_solve(t, tensor)
+
+        Nx.sum(x)
+      end)
+    end
+
+    test "computes grad for tensor wrt a" do
+      assert_all_close(
+        triangular_solve_grad_wrt_a(Nx.tensor([[1.0, 2.0], [0, -1.0]]), Nx.tensor([3.0, 0])),
+        Nx.tensor([[-9, 3], [0, 6]])
+      )
+    end
+
+    test "computes grad for tensor wrt b" do
+      assert_all_close(
+        triangular_solve_grad_wrt_b(Nx.tensor([[1.0, 2.0], [0, -1.0]]), Nx.tensor([3.0, 0])),
+        Nx.tensor([3, -1])
+      )
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))

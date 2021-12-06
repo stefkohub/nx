@@ -588,6 +588,21 @@ defmodule Nx.Defn.Grad do
     [{input, da}]
   end
 
+  defp grad(:triangular_solve, [a, b, opts], _ans, g) do
+    transform_a =
+      case opts[:transform_a] do
+        :none -> :transpose
+        nil -> :transpose
+        _ -> :none
+      end
+
+    opts = Keyword.put(opts, :transform_a, transform_a)
+    db = Nx.LinAlg.triangular_solve(Nx.transpose(a), g, opts)
+
+    da = b |> Nx.transpose() |> Nx.LinAlg.invert() |> Nx.dot(Nx.LinAlg.invert(g))
+    [{a, b}, {b, db}]
+  end
+
   defp grad(:sort, [t, opts], _ans, g) do
     idx = Nx.argsort(t, opts)
     take_along_opts = Keyword.take(opts, [:axis])
