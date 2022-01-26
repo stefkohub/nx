@@ -848,8 +848,8 @@ defmodule EXLA.Defn.ExprTest do
       d = Nx.sum(a)
 
       cond do
-        Nx.all?(Nx.greater(a, 0)) -> b * c * d
-        Nx.all?(Nx.less(a, 0)) -> b + c + d
+        Nx.all(Nx.greater(a, 0)) -> b * c * d
+        Nx.all(Nx.less(a, 0)) -> b + c + d
         true -> -b - c - d
       end
     end
@@ -1268,39 +1268,39 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "all?" do
-    defn all?(t), do: Nx.all?(t)
-    defn all_axis_0?(t), do: Nx.all?(t, axes: [0])
-    defn all_axis_1?(t), do: Nx.all?(t, axes: [1])
+  describe "all" do
+    defn all(t), do: Nx.all(t)
+    defn all_axis_0(t), do: Nx.all(t, axes: [0])
+    defn all_axis_1(t), do: Nx.all(t, axes: [1])
 
     test "computes the bitwise and across types" do
-      assert all?(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 8})
-      assert all?(Nx.tensor([0, 1, 2])) == Nx.tensor(0, type: {:u, 8})
-      assert all?(Nx.tensor([0.0, 1.0, 2.0])) == Nx.tensor(0, type: {:u, 8})
+      assert all(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 8})
+      assert all(Nx.tensor([0, 1, 2])) == Nx.tensor(0, type: {:u, 8})
+      assert all(Nx.tensor([0.0, 1.0, 2.0])) == Nx.tensor(0, type: {:u, 8})
     end
 
     test "computes the bitwise and on given axes" do
-      assert all_axis_0?(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) ==
+      assert all_axis_0(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) ==
                Nx.tensor([1, 0, 1], type: {:u, 8})
 
-      assert all_axis_1?(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) == Nx.tensor([0, 1], type: {:u, 8})
+      assert all_axis_1(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) == Nx.tensor([0, 1], type: {:u, 8})
     end
   end
 
-  describe "any?" do
-    defn any?(t), do: Nx.any?(t)
-    defn any_axis_0?(t), do: Nx.any?(t, axes: [0])
-    defn any_axis_1?(t), do: Nx.any?(t, axes: [1])
+  describe "any" do
+    defn any(t), do: Nx.any(t)
+    defn any_axis_0(t), do: Nx.any(t, axes: [0])
+    defn any_axis_1(t), do: Nx.any(t, axes: [1])
 
     test "computes the bitwise and across types" do
-      assert any?(Nx.tensor([-1, 0, 1])) == Nx.tensor(1, type: {:u, 8})
-      assert any?(Nx.tensor([0, 0, 0])) == Nx.tensor(0, type: {:u, 8})
-      assert any?(Nx.tensor([-1.0, 0.0, 1.0])) == Nx.tensor(1, type: {:u, 8})
+      assert any(Nx.tensor([-1, 0, 1])) == Nx.tensor(1, type: {:u, 8})
+      assert any(Nx.tensor([0, 0, 0])) == Nx.tensor(0, type: {:u, 8})
+      assert any(Nx.tensor([-1.0, 0.0, 1.0])) == Nx.tensor(1, type: {:u, 8})
     end
 
     test "computes the bitwise and on given axes" do
-      assert any_axis_0?(Nx.tensor([[0, 1, 0], [0, 1, 2]])) == Nx.tensor([0, 1, 1], type: {:u, 8})
-      assert any_axis_1?(Nx.tensor([[0, 1, 0], [0, 1, 2]])) == Nx.tensor([1, 1], type: {:u, 8})
+      assert any_axis_0(Nx.tensor([[0, 1, 0], [0, 1, 2]])) == Nx.tensor([0, 1, 1], type: {:u, 8})
+      assert any_axis_1(Nx.tensor([[0, 1, 0], [0, 1, 2]])) == Nx.tensor([1, 1], type: {:u, 8})
     end
   end
 
@@ -1526,6 +1526,8 @@ defmodule EXLA.Defn.ExprTest do
     defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
     defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
     defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
+    defn argmax_keep_axis(t), do: Nx.argmax(t, axis: 1, keep_axis: true)
+    defn argmin_keep_axis(t), do: Nx.argmin(t, axis: 1, keep_axis: true)
 
     test "computes the argmax across types" do
       assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
@@ -1560,6 +1562,22 @@ defmodule EXLA.Defn.ExprTest do
     test "computes argmax with tie_break: :high" do
       assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
       assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
+    end
+
+    test "computes argmax with keep_axis: true" do
+      assert argmax_keep_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([
+                 [[0, 0, 0]],
+                 [[0, 1, 0]]
+               ])
+    end
+
+    test "computes argmin with keep_axis: true" do
+      assert argmin_keep_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([
+                 [[1, 1, 0]],
+                 [[1, 0, 0]]
+               ])
     end
   end
 

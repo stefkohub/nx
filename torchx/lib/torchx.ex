@@ -173,8 +173,11 @@ defmodule Torchx do
   deftensor sum(tensor, axes, keep_axes)
   deftensor product(tensor)
   deftensor product(tensor, axes, keep_axes)
+  deftensor any(tensor)
+  deftensor any(tensor, axes, keep_axes)
   deftensor argmax(tensor, axis, keep_axes)
   deftensor argmin(tensor, axis, keep_axes)
+  deftensor all(tensor)
   deftensor all(tensor, axes, keep_axes)
 
   ## Binary ops
@@ -250,10 +253,13 @@ defmodule Torchx do
   deftensor cholesky(tensor, upper)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
+  deftensor svd(tensor)
+  deftensor svd(tensor, full_matrices)
   deftensor lu(tensor)
   deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
+  deftensor clip(tensor, tensor_min, tensor_max)
 
   ## Dirty non-tensor return values
 

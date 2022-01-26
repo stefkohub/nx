@@ -237,9 +237,20 @@ defmodule Torchx.Backend do
         lengths,
         strides
       ) do
+    starts =
+      [Tuple.to_list(input_shape), start_indices, lengths]
+      |> Enum.zip()
+      |> Enum.map(fn
+        {axis_size, start, len} when start + len >= axis_size ->
+          axis_size - len
+
+        {_, start, _} ->
+          start
+      end)
+
     t
     |> from_nx()
-    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, output_shape, starts, lengths, strides)
     |> to_nx(out)
   end
 
@@ -433,7 +444,10 @@ defmodule Torchx.Backend do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.sum(from_nx(t), axes, keep_axes) |> to_nx(out)
+    t
+    |> from_nx()
+    |> Torchx.sum(axes, keep_axes)
+    |> to_nx(out)
   end
 
   @impl true
@@ -445,29 +459,59 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        product_whole_tensor(t, keep_axes)
+        aggregate_whole_tensor(t, keep_axes, &Torchx.product/1)
       else
-        product_over_axes(t, axes, keep_axes)
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
     to_nx(result, out)
   end
 
-  defp product_whole_tensor(t, keep_axes) do
-    prod =
+  @impl true
+  def any(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        aggregate_whole_tensor(t, keep_axes, &Torchx.any/1)
+      else
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.any/3)
+      end
+
+    to_nx(result, out)
+  end
+
+  @impl true
+  def all(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        aggregate_whole_tensor(t, keep_axes, &Torchx.all/1)
+      else
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.all/3)
+      end
+
+    to_nx(result, out)
+  end
+
+  defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
+    result =
       t
       |> from_nx()
-      |> Torchx.product()
+      |> then(fun)
 
     if keep_axes do
       shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(prod, shape)
+      Torchx.reshape(result, shape)
     else
-      prod
+      result
     end
   end
 
-  defp product_over_axes(t, axes, keep_axes) do
+  defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
     {_, result_tx} =
       for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
         {[], t_tx} ->
@@ -486,7 +530,7 @@ defmodule Torchx.Backend do
               end
             end
 
-          {axes, Torchx.product(t_tx, axis, keep_axes)}
+          {axes, fun.(t_tx, axis, keep_axes)}
       end
 
     result_tx
@@ -510,28 +554,6 @@ defmodule Torchx.Backend do
     keep_axes = opts[:keep_axes] || false
 
     Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
-  end
-
-  @impl true
-  def all?(%T{} = out, %T{} = t, opts) do
-    axes =
-      case opts[:axes] do
-        axes when length(axes) in 0..1 ->
-          axes
-
-        nil ->
-          []
-
-        _axes ->
-          raise ArgumentError, ":axes option only accepts a single axis per call"
-      end
-
-    keep_axes = opts[:keep_axes] || false
-
-    t
-    |> from_nx()
-    |> Torchx.all(axes, keep_axes)
-    |> to_nx(out)
   end
 
   ## Ops
@@ -624,6 +646,13 @@ defmodule Torchx.Backend do
   def qr({q_holder, r_holder}, tensor, opts) do
     {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
     {to_nx(q, q_holder), to_nx(r, r_holder)}
+  end
+
+  @impl true
+  def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
+    {u, s, vt} = Torchx.svd(from_nx(tensor))
+
+    {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end
 
   @impl true
@@ -724,6 +753,15 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sort(axis, descending)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
+    t
+    |> Nx.as_type(out.type)
+    |> from_nx()
+    |> Torchx.clip(from_nx(min), from_nx(max))
     |> to_nx(out)
   end
 

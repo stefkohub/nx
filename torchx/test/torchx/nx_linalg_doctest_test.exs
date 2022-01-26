@@ -14,7 +14,8 @@ defmodule Torchx.NxLinAlgDoctestTest do
     triangular_solve: 3,
     # The expected result for some tests isn't the same
     # even though the A = P.L.U property is maintained for lu/2
-    lu: 2
+    lu: 2,
+    determinant: 1
   ]
 
   @temporarily_broken_doctests [
@@ -22,6 +23,8 @@ defmodule Torchx.NxLinAlgDoctestTest do
     norm: 2,
     # qr - Torchx: "geqrf_cpu" not implemented for 'Long' in NIF.qr/2
     qr: 2,
+    # svd - Torchx: "svd_cpu" not implemented for 'Long' in NIF.svd/2
+    svd: 2,
     # depends on QR
     invert: 1,
     solve: 2,

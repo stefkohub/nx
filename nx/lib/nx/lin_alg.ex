@@ -4,7 +4,8 @@ defmodule Nx.LinAlg do
   """
 
   import Nx.Shared
-  import Nx.Defn.Kernel, only: [keyword!: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
 
   alias Nx.Tensor, as: T
 
@@ -554,23 +555,27 @@ defmodule Nx.LinAlg do
   ### Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-      ** (ArgumentError) can only invert square matrices, got: {2, 4}
+      ** (ArgumentError) expected tensor to match shape {n, n}, got tensor with shape {2, 4}
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       ** (ArgumentError) can't solve for singular matrix
 
   """
   @doc from_backend: false
-  def invert(tensor) do
-    %T{shape: {m, n}} = tensor = Nx.to_tensor(tensor)
+  defn invert(tensor) do
+    assert_shape_pattern(tensor, {n, n})
 
-    if m != n do
-      raise ArgumentError,
-            "can only invert square matrices, got: {#{m}, #{n}}"
-    end
+    tensor
+    |> invert_tensor()
+    |> custom_grad(fn ans, g ->
+      ans_t = Nx.transpose(ans)
+      [{tensor, ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)}]
+    end)
+  end
 
+  defnp invert_tensor(tensor) do
     identity = Nx.eye(tensor)
-    solve(tensor, identity)
+    Nx.LinAlg.solve(tensor, identity)
   end
 
   @doc """
@@ -777,7 +782,7 @@ defmodule Nx.LinAlg do
   @doc """
   Calculates the Singular Value Decomposition of 2-D tensors.
 
-  It returns `{u, s, vt}` where the elemens of `s` are sorted
+  It returns `{u, s, vt}` where the elements of `s` are sorted
   from highest to lowest.
 
   ## Options
@@ -1052,5 +1057,141 @@ defmodule Nx.LinAlg do
       {nil, exp_tensor} -> exp_tensor
       {result, exp_tensor} -> Nx.dot(result, exp_tensor)
     end)
+  end
+
+  @doc """
+  Calculates the determinant of a square 2D tensor.
+
+  ### Examples
+
+  For 2x2 and 3x3, the results are given by the closed formulas:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        f32
+        -2.0
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]]))
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+
+  When there are linearly dependent rows or columns, the determinant is 0:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]]))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]]))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+  The determinant can also be calculated when the axes are bigger than 3:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([
+      ...> [1, 0, 0, 0],
+      ...> [0, 1, 2, 3],
+      ...> [0, 1, -2, 3],
+      ...> [0, 7, 8, 9.0]
+      ...> ]))
+      #Nx.Tensor<
+        f32
+        -48.0
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([
+      ...> [0, 0, 0, 0, -1],
+      ...> [0, 1, 2, 3, 0],
+      ...> [0, 1, -2, 3, 0],
+      ...> [0, 7, 8, 9, 0],
+      ...> [1, 0, 0, 0, 0]
+      ...> ]))
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+  """
+  defn determinant(tensor) do
+    Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
+
+    {n, _} = Nx.shape(tensor)
+
+    transform(n, fn
+      2 ->
+        determinant_2by2(tensor)
+
+      3 ->
+        determinant_3by3(tensor)
+
+      _ ->
+        determinant_NbyN(tensor)
+    end)
+  end
+
+  # for 2x2 and 3x3, use the algebraic closed formula
+  defnp determinant_2by2(t) do
+    t = Nx.tile(t, [1, 2])
+
+    result = diagonal_product(t, 0) - diagonal_product(t, 1)
+
+    # Ensure floating point result
+    result * 1.0
+  end
+
+  defnp determinant_3by3(t) do
+    pos_t = Nx.tile(t, [1, 2])
+
+    neg_t = Nx.reverse(pos_t, axes: [1])
+
+    result =
+      diagonal_product(pos_t, 0) +
+        diagonal_product(pos_t, 1) +
+        diagonal_product(pos_t, 2) -
+        diagonal_product(neg_t, 0) -
+        diagonal_product(neg_t, 1) -
+        diagonal_product(neg_t, 2)
+
+    # Ensure floating point result
+    result * 1.0
+  end
+
+  defnp determinant_NbyN(t) do
+    {n, _} = Nx.shape(t)
+
+    # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
+    {p, l, u} = Nx.LinAlg.lu(t)
+
+    diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
+
+    is_zero = Nx.any(diag == 0)
+
+    iota = Nx.iota({n})
+
+    parity = Nx.sum(Nx.dot(p, iota) != iota)
+
+    sign =
+      if is_zero do
+        0
+      else
+        -2 * rem(parity, 2) + 1
+      end
+
+    if is_zero do
+      0
+    else
+      sign * Nx.product(diag)
+    end
+  end
+
+  defnp diagonal_product(t, offset) do
+    t
+    |> Nx.take_diagonal(offset: offset)
+    |> Nx.product()
   end
 end

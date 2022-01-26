@@ -72,8 +72,8 @@ defmodule Nx.Backend do
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback conv(out :: tensor, tensor, kernel :: tensor, keyword) :: tensor
-  @callback all?(out :: tensor, tensor, keyword) :: tensor
-  @callback any?(out :: tensor, tensor, keyword) :: tensor
+  @callback all(out :: tensor, tensor, keyword) :: tensor
+  @callback any(out :: tensor, tensor, keyword) :: tensor
   @callback sum(out :: tensor, tensor, keyword) :: tensor
   @callback product(out :: tensor, tensor, keyword) :: tensor
   @callback reduce_max(out :: tensor, tensor, keyword) :: tensor
@@ -107,7 +107,7 @@ defmodule Nx.Backend do
       [:logical_and, :logical_or, :logical_xor]
 
   for binary_op <- binary_ops do
-    @callback unquote(binary_op)(out :: t, t, t) :: t
+    @callback unquote(binary_op)(out :: tensor, tensor, tensor) :: tensor
   end
 
   unary_ops =
@@ -116,7 +116,7 @@ defmodule Nx.Backend do
       [:count_leading_zeros, :population_count]
 
   for unary_op <- unary_ops do
-    @callback unquote(unary_op)(out :: t, t) :: t
+    @callback unquote(unary_op)(out :: tensor, tensor) :: tensor
   end
 
   alias Inspect.Algebra, as: IA
